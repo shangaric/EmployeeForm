@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { useForm } from "react-hook-form";
 import { yupResolver } from "@hookform/resolvers/yup";
@@ -30,56 +30,88 @@ function App() {
   const [showForm, setShowForm] = useState(false);
   const [employees, setEmployees] = useState([]);
   const [showDetails, setShowDetails] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+  const [editEmployeeId, setEditEmployeeId] = useState(null);
 
   const {
     register,
     handleSubmit,
     reset,
+    setValue,
     formState: { errors },
   } = useForm({
     resolver: yupResolver(schema),
   });
 
-  const onSubmit = async (data) => {
-    try {
-      const formattedData={
-        ...data,
-        date_of_joining:new Date(data.date_of_joining).toISOString().split('T')[0]
-      }
-  
-      await axios.post("http://localhost:5000/addEmployee", formattedData);
-      alert("Employee added successfully!");
-      reset();
-      setShowForm(false);
-    } catch (error) {
-      alert(`Error: ${error.response?.data?.message || error.message}`);
-    }
-  };
-  
+  // Fetch employees
   const fetchEmployees = async () => {
-    if (showDetails) {
-      setShowDetails(false);
-      return;
-    }
     try {
       const response = await axios.get("http://localhost:5000/getEmployees");
       setEmployees(response.data);
       setShowDetails(true);
     } catch (error) {
-      alert(`Error fetching employees: ${error.message}`);  // Corrected error handling
+      alert(`Error fetching employees: ${error.message}`);
     }
   };
 
+  // Add/Update employee
+  const onSubmit = async (data) => {
+    try {
+      const formattedData = {
+        ...data,
+        date_of_joining: new Date(data.date_of_joining).toISOString().split("T")[0],
+      };
+
+      if (editMode) {
+        await axios.put(`http://localhost:5000/updateEmployee/${editEmployeeId}`, formattedData);
+        alert("Employee updated successfully!");
+      } else {
+        await axios.post("http://localhost:5000/addEmployee", formattedData);
+        alert("Employee added successfully!");
+      }
+
+      reset();
+      setShowForm(false);
+      setEditMode(false);
+      setEditEmployeeId(null);
+      fetchEmployees();
+    } catch (error) {
+      alert(`Error: ${error.response?.data?.message || error.message}`);
+    }
+  };
+
+  // Edit employee function
+  const editEmployee = (employee) => {
+    setEditMode(true);
+    setEditEmployeeId(employee.employee_id);  // Changed to employee.employee_id
+
+    setShowForm(true);
+
+    // Populate form fields
+    Object.keys(employee).forEach((key) => {
+      if (key === "date_of_joining") {
+        setValue(key, new Date(employee[key]).toISOString().split("T")[0]);
+      } else {
+        setValue(key, employee[key]);
+      }
+    });
+  };
+
+  useEffect(() => {
+    fetchEmployees();
+  }, []);
+
   return (
     <div className="page-container">
-       <h1 className="page-heading">Employee Management System</h1>
+      <h1 className="page-heading">Employee Management System</h1>
 
       {!showForm && (
         <div className="action-buttons">
-          <button  className="button-add" onClick={() => setShowForm(true)}>Add Employee</button>
-          <button  className="button-get-details" onClick={fetchEmployees}>
-            {showDetails ? "Hide Details" : "Get Details"}
+          <button className="button-add" onClick={() => setShowForm(true)}>Add Employee</button>
+          <button className="button-get-details" onClick={() => setShowDetails(!showDetails)}>
+           {showDetails ? "Hide Details" : "Get Details"}
           </button>
+
         </div>
       )}
 
@@ -120,20 +152,18 @@ function App() {
           <div>
             <label>Date of Joining:</label>
             <input type="date" {...register("date_of_joining")} />
-            {errors.date_of_joining && (
-              <small className="error">{errors.date_of_joining.message}</small>
-            )}
+            {errors.date_of_joining && <small className="error">{errors.date_of_joining.message}</small>}
           </div>
           <div>
             <label>Role:</label>
             <input type="text" {...register("role")} />
             {errors.role && <small className="error">{errors.role.message}</small>}
           </div>
-          <button type="submit">Submit</button>
+          <button type="submit">{editMode ? "Update" : "Submit"}</button>
           <button type="button" onClick={() => reset()}>
             Reset
           </button>
-          <button type="button" onClick={() => setShowForm(false)}>
+          <button type="button" onClick={() => { setShowForm(false); setEditMode(false); }}>
             Cancel
           </button>
         </form>
@@ -150,11 +180,12 @@ function App() {
               <th>Department</th>
               <th>Date of Joining</th>
               <th>Role</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
             {employees.map((employee) => (
-              <tr key={employee.id}>
+              <tr key={employee.employee_id}>  {/* Use employee.employee_id */}
                 <td>{employee.name}</td>
                 <td>{employee.employee_id}</td>
                 <td>{employee.email}</td>
@@ -162,6 +193,9 @@ function App() {
                 <td>{employee.department}</td>
                 <td>{new Date(employee.date_of_joining).toLocaleDateString()}</td>
                 <td>{employee.role}</td>
+                <td>
+                  <button onClick={() => editEmployee(employee)}>Edit</button>
+                </td>
               </tr>
             ))}
           </tbody>
